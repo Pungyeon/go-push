@@ -18,8 +18,9 @@ type Command interface {
 }
 
 type Upload struct {
-	Filename string
-	Destination string
+	Template bool `yaml:"template"`
+	Filename string `yaml:"filename"`
+	Destination string `yaml:"destination"`
 }
 var _ Command = Upload{}
 
@@ -106,38 +107,43 @@ func listenForPasswordPrompt(stdin io.WriteCloser, stdout io.Reader, password st
 var _ Command = Bash{}
 
 func (s Upload) WithTemplate(host Host) Upload {
-	n := Upload {
+	return Upload {
+		Template: s.Template,
 		Filename: Template(host.Variables, s.Filename),
 		Destination: Template(host.Variables, s.Destination),
 	}
-	fmt.Println("N:",n)
-	return n
 }
 
 func (s Upload) Run(host Host) error {
-	fmt.Printf("sending file: %s to %s:%s\n", s.Filename, host.Client.RemoteAddr(), s.Destination)
-	//return s.WithTemplate(host).run(host)
-	s.WithTemplate(host)
-	return nil
+	return s.WithTemplate(host).run(host)
 }
 
 func (s Upload) run(host Host) error {
-	s = s.WithTemplate(host)
-	fmt.Printf("sending file: %s to %s:%s\n", s.Filename, host.Client.RemoteAddr(), s.Destination)
-	tmp, err := RewriteTemplateFile(host, s.Filename)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := os.Remove(tmp); err != nil {
-			fmt.Println(err)
+	var f *os.File
+	var err error
+	if !s.Template {
+		fmt.Println("no template:", host.Address, s.Filename)
+		f, err = os.Open(s.Filename)
+		if err != nil {
+			return err
 		}
-	}()
-
-	f, err := os.Open(tmp)
-	if err != nil {
-		return err
+	} else {
+		fmt.Println("template:", host.Address, s.Filename)
+		tmp, err := RewriteTemplateFile(host, s.Filename)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := os.Remove(tmp); err != nil {
+				fmt.Println(err)
+			}
+		}()
+		f, err = os.Open(tmp)
+		if err != nil {
+			return err
+		}
 	}
+
 	defer f.Close()
 
 	stat, err := f.Stat()
@@ -166,7 +172,6 @@ func RewriteTemplateFile(host Host, filename string) (string, error) {
 }
 
 func Template(vars map[string]string, value string) string {
-	fmt.Println("templating", vars, value)
 	var i int
 	var output string
 	for i < len(value) {

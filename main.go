@@ -27,7 +27,7 @@ func main() {
 		}
 
 		for _, host := range hosts {
-			fmt.Println("[*] Running Commands against:", host.Client.RemoteAddr())
+			fmt.Println("[*] Running Commands against:", host.Client.RemoteAddr(), host.Variables)
 			for _, cmd := range commands {
 				if err := cmd.Run(host); err != nil {
 					time.Sleep(time.Second)

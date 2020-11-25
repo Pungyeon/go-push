@@ -97,6 +97,7 @@ func (c *Config) ParseClients() ([]model.Host, error) {
 		clients = append(clients, model.Host{
 			Address: host.GetAddr(),
 			Password: host.Password,
+			Variables: host.Variables,
 			Client: client,
 		})
 	}
