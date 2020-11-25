@@ -14,6 +14,7 @@ type HostConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 	CertPath string  `yaml:"cert_path"`
+	Variables map[string]string `yaml:"variables"`
 }
 
 func (host *HostConfig) GetAddr() string {
@@ -31,8 +32,9 @@ type CommandConfig struct {
 type CmdType string
 
 const (
-	CmdTypeBash CmdType = "bash"
-	CmdTypeSCP CmdType = "scp"
+	CmdTypeBash   CmdType = "bash"
+	CmdTypeUpload CmdType = "upload"
+	CmdTypeDownload CmdType = "download"
 )
 
 type Config struct {
@@ -60,8 +62,8 @@ func New(paths ...string) ([]Config, error) {
 func (c *Config) ParseCommands() ([]model.Command, error) {
 	var commands []model.Command
 	for _, cmd := range c.Commands {
-		if cmd.Type == CmdTypeSCP {
-			var scp model.SCP
+		if cmd.Type == CmdTypeUpload {
+			var scp model.Upload
 			if err := mapstructure.Decode(cmd.Value, &scp); err != nil {
 				return nil, err
 			}

@@ -30,6 +30,7 @@ func main() {
 			fmt.Println("[*] Running Commands against:", host.Client.RemoteAddr())
 			for _, cmd := range commands {
 				if err := cmd.Run(host); err != nil {
+					time.Sleep(time.Second)
 					panic(err)
 				}
 			}

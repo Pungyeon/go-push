@@ -6,19 +6,22 @@ import (
 	"github.com/tmc/scp"
 	"golang.org/x/crypto/ssh"
 	"io"
+	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Command interface {
 	Run(Host) error
 }
 
-type SCP struct {
+type Upload struct {
 	Filename string
 	Destination string
 }
-var _ Command = SCP{}
+var _ Command = Upload{}
 
 type Bash struct {
 	Commands []string `yaml:"commands"`
@@ -56,7 +59,9 @@ func (b Bash) Run(host Host) error {
 			panic(err)
 		}
 		go listenForPasswordPrompt(stdin, stdout, host.Password)
+		go listenForPasswordPrompt(stdin, stderr, host.Password)
 		go io.Copy(os.Stderr, stderr)
+		go io.Copy(os.Stdout, stdout)
 
 		fmt.Println("#> "+cmd)
 		if err :=  sess.Run(cmd); err != nil {
@@ -87,6 +92,7 @@ func listenForPasswordPrompt(stdin io.WriteCloser, stdout io.Reader, password st
 					break
 				}
 				output = append(output, []byte(rest)...)
+				fmt.Println("writing password to stdin")
 				_, err = stdin.Write([]byte(password + "\n"))
 				if err != nil {
 					break
@@ -99,8 +105,36 @@ func listenForPasswordPrompt(stdin io.WriteCloser, stdout io.Reader, password st
 
 var _ Command = Bash{}
 
-func (s SCP) Run(host Host) error {
-	f, err := os.Open(s.Filename)
+func (s Upload) WithTemplate(host Host) Upload {
+	n := Upload {
+		Filename: Template(host.Variables, s.Filename),
+		Destination: Template(host.Variables, s.Destination),
+	}
+	fmt.Println("N:",n)
+	return n
+}
+
+func (s Upload) Run(host Host) error {
+	fmt.Printf("sending file: %s to %s:%s\n", s.Filename, host.Client.RemoteAddr(), s.Destination)
+	//return s.WithTemplate(host).run(host)
+	s.WithTemplate(host)
+	return nil
+}
+
+func (s Upload) run(host Host) error {
+	s = s.WithTemplate(host)
+	fmt.Printf("sending file: %s to %s:%s\n", s.Filename, host.Client.RemoteAddr(), s.Destination)
+	tmp, err := RewriteTemplateFile(host, s.Filename)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := os.Remove(tmp); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	f, err := os.Open(tmp)
 	if err != nil {
 		return err
 	}
@@ -117,4 +151,56 @@ func (s SCP) Run(host Host) error {
 	defer sess.Close()
 	fmt.Printf("sending file: %s to %s\n", f.Name(), host.Client.RemoteAddr())
 	return scp.Copy(stat.Size(), os.ModePerm, f.Name(), f, s.Destination, sess)
+}
+
+func RewriteTemplateFile(host Host, filename string) (string, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	tmpfile := strconv.FormatInt(time.Now().Unix(), 10) + ".tmp"
+	if err := ioutil.WriteFile(tmpfile, []byte(Template(host.Variables, string(data))), 0777); err != nil {
+		return tmpfile, err
+	}
+	return tmpfile, err
+}
+
+func Template(vars map[string]string, value string) string {
+	fmt.Println("templating", vars, value)
+	var i int
+	var output string
+	for i < len(value) {
+		switch value[i] {
+		case '{':
+			if i < len(value)-1 && value[i+1] == '{' {
+				i += 2
+				var hostVar string
+				i, hostVar = getVariable(vars, value, i)
+				output += hostVar
+			}
+		default:
+			output += string(value[i])
+		}
+		i++
+	}
+	return output
+}
+
+func getVariable(vars map[string]string, value string, i int) (int, string) {
+	start := i
+	for i < len(value) {
+		switch value[i] {
+		case '}':
+			if i < len(value)-1 && value[i+1] == '}' {
+				v := value[start:i]
+				variable, ok := vars[v]
+				if !ok {
+					panic(fmt.Sprintf("no variable with key: %v", v))
+				}
+				return i+1, variable
+			}
+		}
+		i++
+	}
+	return len(value), value[i:]
 }
