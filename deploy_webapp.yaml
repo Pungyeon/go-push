@@ -1,0 +1,17 @@
+hosts:
+  - address: "172.20.207.157"
+    # port
+    username: "corti"
+    password: "corti"
+    # cert_path
+commands:
+  - type: scp
+    value:
+      filename: "C:\\sos_alarm\\corti-webapp-5.0.2.tar"
+      destination: "/tmp/webapp.tar"
+  - type: bash
+    value:
+      commands:
+        - "sudo docker load -i /tmp/webapp.tar"
+        - "sudo docker image ls"
+        - "sudo docker run -d -p 3000:3000 corti-webapp:5.0.2"

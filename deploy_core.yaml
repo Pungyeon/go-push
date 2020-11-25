@@ -1,0 +1,16 @@
+hosts:
+  - address: "172.26.162.230"
+    # port
+    username: "corti"
+    password: "corti"
+    # cert_path
+commands:
+  - type: scp
+    value:
+      filename: "test.txt"
+      destination: "/tmp/transferred.txt"
+  - type: bash
+    value:
+      commands:
+        - "whoami"
+        - "cat /tmp/transferred.txt"
