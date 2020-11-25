@@ -122,13 +122,11 @@ func (s Upload) run(host Host) error {
 	var f *os.File
 	var err error
 	if !s.Template {
-		fmt.Println("no template:", host.Address, s.Filename)
 		f, err = os.Open(s.Filename)
 		if err != nil {
 			return err
 		}
 	} else {
-		fmt.Println("template:", host.Address, s.Filename)
 		tmp, err := RewriteTemplateFile(host, s.Filename)
 		if err != nil {
 			return err
@@ -155,7 +153,7 @@ func (s Upload) run(host Host) error {
 		return err
 	}
 	defer sess.Close()
-	fmt.Printf("sending file: %s to %s\n", f.Name(), host.Client.RemoteAddr())
+	fmt.Printf("sending file (template: %v): %s to %s\n", s.Template, f.Name(), host.Client.RemoteAddr())
 	return scp.Copy(stat.Size(), os.ModePerm, f.Name(), f, s.Destination, sess)
 }
 
