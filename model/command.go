@@ -28,7 +28,7 @@ func (b Bash) Run(host Host) error {
 	for _, cmd := range b.Commands {
 		sess, err := host.Client.NewSession()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		defer sess.Close()
 
