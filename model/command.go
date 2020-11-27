@@ -29,6 +29,17 @@ type Bash struct {
 }
 
 func (b Bash) Run(host Host) error {
+	return b.WithTemplate(host).run(host)
+}
+
+func (b Bash) WithTemplate(host Host) Bash {
+	for i := range b.Commands {
+		b.Commands[i] = Template(host.Variables, b.Commands[i])
+	}
+	return b
+}
+
+func (b Bash) run(host Host) error {
 	for _, cmd := range b.Commands {
 		sess, err := host.Client.NewSession()
 		if err != nil {
@@ -60,9 +71,8 @@ func (b Bash) Run(host Host) error {
 			panic(err)
 		}
 		go listenForPasswordPrompt(stdin, stdout, host.Password)
-		go listenForPasswordPrompt(stdin, stderr, host.Password)
 		go io.Copy(os.Stderr, stderr)
-		go io.Copy(os.Stdout, stdout)
+		//go io.Copy(os.Stdout, stdout)
 
 		fmt.Println("#> "+cmd)
 		if err :=  sess.Run(cmd); err != nil {
@@ -93,9 +103,11 @@ func listenForPasswordPrompt(stdin io.WriteCloser, stdout io.Reader, password st
 					break
 				}
 				output = append(output, []byte(rest)...)
-				fmt.Println("writing password to stdin")
+				//fmt.Println("writing password to stdin")
+				time.Sleep(time.Millisecond*100)
 				_, err = stdin.Write([]byte(password + "\n"))
 				if err != nil {
+					fmt.Println(err)
 					break
 				}
 			}
@@ -153,7 +165,7 @@ func (s Upload) run(host Host) error {
 		return err
 	}
 	defer sess.Close()
-	fmt.Printf("sending file (template: %v): %s to %s\n", s.Template, f.Name(), host.Client.RemoteAddr())
+	fmt.Printf("sending file (template: %v): %s (%s) -> %s:%s\n", s.Template, s.Filename, f.Name(), host.Client.RemoteAddr(), s.Destination)
 	return scp.Copy(stat.Size(), os.ModePerm, f.Name(), f, s.Destination, sess)
 }
 

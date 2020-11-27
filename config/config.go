@@ -17,6 +17,20 @@ type HostConfig struct {
 	Variables map[string]string `yaml:"variables"`
 }
 
+func (host *HostConfig) GetUsername(global GlobalConfig) string {
+	if host.Username == "" {
+		return global.Username
+	}
+	return host.Username
+}
+
+func (host *HostConfig) GetPassword(global GlobalConfig) string {
+	if host.Username == "" {
+		return global.Password
+	}
+	return host.Password
+}
+
 func (host *HostConfig) GetAddr() string {
 	if host.Port == "" {
 		host.Port = "22"
@@ -37,8 +51,16 @@ const (
 	CmdTypeDownload CmdType = "download"
 )
 
+type GlobalConfig struct {
+	Async bool `yaml:"async"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	Variables map[string]string `yaml:"variables"`
+}
+
 type Config struct {
-	Hosts []HostConfig
+	Global GlobalConfig `yaml:"global"`
+	Hosts []HostConfig `yaml:"hosts"`
 	Commands []CommandConfig `yaml:"commands"`
 }
 
@@ -81,25 +103,37 @@ func (c *Config) ParseCommands() ([]model.Command, error) {
 
 func (c *Config) ParseClients() ([]model.Host, error) {
 	var clients []model.Host
-	for _, host := range c.Hosts {
-		sshConfig := &ssh.ClientConfig{
-			User: host.Username,
-			Auth: []ssh.AuthMethod{
-				ssh.Password(host.Password),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		}
-
-		client, err := ssh.Dial("tcp", host.GetAddr(), sshConfig)
+	for _, hostConfig := range c.Hosts {
+		host, config := c.ParseClient(hostConfig)
+		client, err := ssh.Dial("tcp", hostConfig.GetAddr(), config)
 		if err != nil {
 			return nil, err
 		}
-		clients = append(clients, model.Host{
-			Address: host.GetAddr(),
-			Password: host.Password,
-			Variables: host.Variables,
-			Client: client,
-		})
+		clients = append(clients, host.WithClient(client))
 	}
 	return clients, nil
+}
+
+func (c *Config) ParseClient(host HostConfig) (model.Host, *ssh.ClientConfig) {
+	return model.Host{
+		Address: host.GetAddr(),
+		Password: host.GetPassword(c.Global),
+		Variables: addGlobalVariables(host.Variables, c.Global.Variables),
+	},
+	&ssh.ClientConfig{
+		User: host.GetUsername(c.Global),
+		Auth: []ssh.AuthMethod{
+			ssh.Password(host.GetPassword(c.Global)),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+}
+
+func addGlobalVariables(vars, global map[string]string) map[string]string {
+	for k, v := range global {
+		if _, ok := vars[k]; !ok {
+			vars[k] = v
+		}
+	}
+	return vars
 }

@@ -9,3 +9,8 @@ type Host struct {
 	Variables map[string]string
 	Client *ssh.Client
 }
+
+func (host Host) WithClient(client *ssh.Client) Host {
+	host.Client = client
+	return host
+}
